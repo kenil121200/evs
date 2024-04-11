@@ -1,0 +1,54 @@
+.App {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.table-container {
+  margin: 0 auto;
+  width: 50%; 
+}
+
+.image-container-admin {
+  margin-top: 20px;
+}
+
+.image-container-admin img {
+  border-radius: 5px;
+  border: 1px solid #1976D2; 
+}
+
+.upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.button-like-label {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-bottom: 10px;
+}
+
+.button-like-label:hover {
+  background-color: #0056b3;
+}
+
+.upload-container form button {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.upload-container form button:hover {
+  background-color: #0056b3;
+}

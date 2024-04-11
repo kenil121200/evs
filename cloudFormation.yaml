@@ -1,0 +1,570 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  EmployeeBucketName:
+    Type: String
+    Default: csci5409-employees-images-database
+
+Resources:
+  csci5409EmployeeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "employeeId"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "employeeId"
+          KeyType: "HASH"
+      TableName: "csci5409-employee"
+      ProvisionedThroughput:
+        ReadCapacityUnits: '2'
+        WriteCapacityUnits: '2'
+  
+  csci5409EmployeesCollection:
+    Type: AWS::Rekognition::Collection
+    Properties:
+      CollectionId: employees
+
+  csci5409SendEmailTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: email-notification
+      FifoTopic: false
+      TopicName: email-notification
+  
+  csci5409SendEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: kenilaivid@gmail.com
+      TopicArn: !Ref csci5409SendEmailTopic
+
+  csci5409RegistrationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: csci5409-employees-registration
+      Code:
+        S3Bucket: "b00954251termassignmentfunctions"
+        S3Key: "csci5409-employees-registration.zip"
+      Handler: lambda_function.lambda_handler
+      Runtime: "python3.10"
+      Timeout: 60
+      MemorySize: 512
+      Role: "arn:aws:iam::471112832723:role/LabRole"
+    
+  csci5409AuthenticationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: csci5409-employees-authentication
+      Code:
+        S3Bucket: "b00954251termassignmentfunctions"
+        S3Key: "csci5409-employees-authentication.zip"
+      Handler: lambda_function.lambda_handler
+      Runtime: "python3.10"
+      Timeout: 60
+      MemorySize: 512
+      Role: "arn:aws:iam::471112832723:role/LabRole"
+
+  csci5409SendEmailFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: csci5409-send-email
+      Code:
+        S3Bucket: "b00954251termassignmentfunctions"
+        S3Key: "csci5409-send-email.zip"
+      Handler: lambda_function.lambda_handler
+      Runtime: "python3.10"
+      Timeout: 60
+      MemorySize: 512
+      Role: "arn:aws:iam::471112832723:role/LabRole"
+
+  csci5409DeleteEmployeeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: csci5409-delete-employee
+      Code:
+        S3Bucket: "b00954251termassignmentfunctions"
+        S3Key: "csci5409-delete-employee.zip"
+      Handler: lambda_function.lambda_handler
+      Runtime: "python3.10"
+      Timeout: 60
+      MemorySize: 512
+      Role: "arn:aws:iam::471112832723:role/LabRole"
+
+  csci5409EmployeesDatabaseBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref EmployeeBucketName
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            MaxAge: 3000
+            AllowedHeaders:
+              - "*"
+            ExposedHeaders:
+              - "Authorization"
+  
+  csci5409VisitorsDatabaseBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: csci5409-visitors-images-database
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            MaxAge: 3000
+            AllowedHeaders:
+              - "*"
+            ExposedHeaders:
+              - "Authorization"
+
+  csci5409EVSGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: "csci5409-evs-api"
+      Description: "API gateway for employee verification system"
+      BinaryMediaTypes:
+        - "image/jpg"
+        - "image/jpeg"
+        - "image/png"
+  
+  evsresponse4xx:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref csci5409EVSGateway
+      ResponseType: DEFAULT_4XX
+      StatusCode: '404'
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+
+  evsresponse5xx:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref csci5409EVSGateway
+      ResponseType: DEFAULT_5XX
+      StatusCode: '500'
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+
+  evsBucketResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt
+        - csci5409EVSGateway
+        - RootResourceId
+      PathPart: "{bucket}"
+      RestApiId: !Ref csci5409EVSGateway
+    
+  evsBucketOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref evsBucketResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS'"
+        RequestTemplates:
+          "application/json": "{\"statusCode\": 200}"
+        PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: "Empty"
+
+  evsFilenameResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref evsBucketResource
+      RestApiId: !Ref csci5409EVSGateway
+      PathPart: "{filename}"
+  
+  evsFilenameOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref evsFilenameResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PUT, OPTIONS'"
+        RequestTemplates:
+          "application/json": "{\"statusCode\": 200}"
+        PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: "Empty"
+
+  evsFilenamePutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: PUT
+      ResourceId: !Ref evsFilenameResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: "AWS"
+        IntegrationHttpMethod: PUT
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:s3:path/{bucket}/{filename}"
+        Credentials: "arn:aws:iam::471112832723:role/LabRole"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestParameters:
+          integration.request.path.filename: "method.request.path.filename"
+          integration.request.path.bucket: "method.request.path.bucket"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              "application/json": ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: "Empty"
+      RequestParameters:
+        method.request.path.filename: true
+        method.request.path.bucket: true
+      
+  
+  evsEmployeeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt
+        - csci5409EVSGateway
+        - RootResourceId
+      PathPart: "employee"
+      RestApiId: !Ref csci5409EVSGateway
+  
+  evsEmployeeOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref evsEmployeeResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET, OPTIONS'"
+        RequestTemplates:
+          "application/json": "{\"statusCode\": 200}"
+        PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: "Empty"
+
+  evsEmployeeGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref evsEmployeeResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Credentials: "arn:aws:iam::471112832723:role/LabRole"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${csci5409AuthenticationFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        ContentHandling: CONVERT_TO_TEXT
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: "Empty"
+
+  evsSendEmailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt
+        - csci5409EVSGateway
+        - RootResourceId
+      PathPart: "send-email"
+      RestApiId: !Ref csci5409EVSGateway
+  
+  evsSendEmailOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref evsSendEmailResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST, OPTIONS'"
+        RequestTemplates:
+          "application/json": "{\"statusCode\": 200}"
+        PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: "Empty"
+
+  evsSendEmailPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref evsSendEmailResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Credentials: "arn:aws:iam::471112832723:role/LabRole"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${csci5409SendEmailFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        ContentHandling: CONVERT_TO_TEXT
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: "Empty"
+    
+  evsDeleteEmployeeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt
+        - csci5409EVSGateway
+        - RootResourceId
+      PathPart: "delete-employee"
+      RestApiId: !Ref csci5409EVSGateway
+  
+  evsDeleteEmployeeOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref evsDeleteEmployeeResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST, OPTIONS'"
+        RequestTemplates:
+          "application/json": "{\"statusCode\": 200}"
+        PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+          ResponseModels:
+            application/json: "Empty"
+
+  evsDeleteEmployeePostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref evsDeleteEmployeeResource
+      RestApiId: !Ref csci5409EVSGateway
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Credentials: "arn:aws:iam::471112832723:role/LabRole"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${csci5409DeleteEmployeeFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        ContentHandling: CONVERT_TO_TEXT
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: "Empty"
+
+  evsGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: 
+      - evsresponse4xx
+      - evsresponse5xx
+      - evsBucketOptionsMethod
+      - evsFilenameOptionsMethod
+      - evsFilenamePutMethod
+      - evsEmployeeOptionsMethod
+      - evsEmployeeGetMethod
+      - evsSendEmailOptionsMethod
+      - evsSendEmailPostMethod
+      - evsDeleteEmployeeOptionsMethod
+      - evsDeleteEmployeePostMethod
+    Properties:
+      Description: EVS API deployment
+      RestApiId: !Ref csci5409EVSGateway
+  
+  evsGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref evsGatewayDeployment
+      Description: EVS API Stage dev
+      RestApiId: !Ref csci5409EVSGateway
+      StageName: 'prod'
+
+  csci5409AuthenticationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt csci5409AuthenticationFunction.Arn
+      Principal: apigateway.amazonaws.com
+    DependsOn:
+    - evsGatewayDeployment
+
+  csci5409SendEmailFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt csci5409SendEmailFunction.Arn
+      Principal: apigateway.amazonaws.com
+    DependsOn:
+    - evsGatewayDeployment
+
+  csci5409DeleteEmployeeFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt csci5409DeleteEmployeeFunction.Arn
+      Principal: apigateway.amazonaws.com
+    DependsOn:
+    - evsGatewayDeployment
+
+  csci5409RegistrationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt csci5409RegistrationFunction.Arn
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt csci5409EmployeesDatabaseBucket.Arn
+    DependsOn:
+    - csci5409RegistrationFunction
+    - csci5409EmployeesDatabaseBucket
+  
+  evsSecurityGroupEC2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "EVS EC2"
+      GroupName: ec2securitygroup
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+
+  evsEC2:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - csci5409EVSGateway
+    Properties:
+      ImageId: ami-080e1f13689e07408
+      InstanceType: t3.medium
+      KeyName: vockey
+      SecurityGroups:
+        - !Ref evsSecurityGroupEC2
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          cd /home/ubuntu
+          git clone https://github.com/kenil121200/csci5409.git
+          cd csci5409
+          sudo apt-get update -y
+          sudo apt install npm -y
+          npm install
+          sudo apt-get install -y awscli
+          sudo apt-get install jq -y
+          aws configure set aws_access_key_id Your_AWS_ACCESS_ID
+          aws configure set aws_secret_access_key Your_AWS_SECRET_KEY
+          aws configure set aws_session_token Your_AWS_SESSION_TOKEN
+          aws configure set region us-east-1
+          echo "REACT_APP_AWS_ACCESS_KEY_ID=Your_AWS_ACCESS_ID" >> .env
+          echo "REACT_APP_AWS_SECRET_ACCESS_KEY=Your_AWS_SECRET_KEY" >> .env
+          echo "REACT_APP_AWS_SESSION_TOKEN=Your_AWS_SESSION_TOKEN" >> .env
+          echo "REACT_APP_AWS_REGION=us-east-1" >> .env
+          echo "REACT_APP_AWS_S3_API_VERSION=2006-03-01" >> .env
+          echo "REACT_APP_AWS_S3_VISITOR_BUCKET_NAME=csci5409-visitors-images-database" >> .env
+          echo "REACT_APP_AWS_S3_EMPLOYEE_BUCKET_NAME=csci5409-employees-images-database" >> .env
+          gatewayid=$(aws apigateway get-rest-apis | jq -r '.items[] | select(.name=="csci5409-evs-api") | .id')
+          REACT_APP_AWS_API_URL="REACT_APP_AWS_API_URL=https://${gatewayid}.execute-api.us-east-1.amazonaws.com/prod"
+          echo $REACT_APP_AWS_API_URL >> .env
+          echo "REACT_APP_AWS_REKOGNITION_COLLECTION=employee" >> .env
+          nohup npm start > /dev/null 2>&1 &
